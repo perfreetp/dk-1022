@@ -4,7 +4,7 @@ import { useStore } from '../store';
 import Header from '../components/Header';
 
 export default function Inventory() {
-  const { inventory, addInventory, updateInventory } = useStore();
+  const { inventory, addInventory, updateInventory, deleteInventory } = useStore();
   const [showModal, setShowModal] = useState(false);
   const [editingItem, setEditingItem] = useState<typeof inventory[0] | null>(null);
   const [formData, setFormData] = useState({
@@ -43,6 +43,36 @@ export default function Inventory() {
       price: item.price,
     });
     setShowModal(true);
+  };
+
+  const handleDelete = (id: string) => {
+    if (confirm('确定要删除这条库存记录吗？')) {
+      deleteInventory(id);
+    }
+  };
+
+  const handleExport = () => {
+    const headers = ['名称', '编码', '数量', '批号', '效期', '库存预警状态'];
+    const rows = inventory.map(item => {
+      const isLowStock = item.quantity <= item.min_stock;
+      const isExpiring = new Date(item.expire_date) <= new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+      let status = '正常';
+      if (isLowStock && isExpiring) status = '低库存+即将过期';
+      else if (isLowStock) status = '低库存';
+      else if (isExpiring) status = '即将过期';
+      return [item.name, item.code, `${item.quantity} ${item.unit}`, item.batch_no, item.expire_date, status];
+    });
+
+    const csvContent = [headers.join(','), ...rows.map(row => row.join(','))].join('\n');
+    const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `库存盘点表_${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   const isLowStock = (item: typeof inventory[0]) => item.quantity <= item.min_stock;
@@ -117,7 +147,10 @@ export default function Inventory() {
           <div className="p-4 border-b flex items-center justify-between">
             <h3 className="font-semibold">库存列表</h3>
             <div className="flex items-center space-x-3">
-              <button className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 flex items-center">
+              <button
+                onClick={handleExport}
+                className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 flex items-center"
+              >
                 <Download className="w-4 h-4 mr-2" />
                 导出盘点表
               </button>
@@ -168,7 +201,10 @@ export default function Inventory() {
                           >
                             <Edit className="w-4 h-4" />
                           </button>
-                          <button className="p-2 text-gray-500 hover:text-medical-red hover:bg-medical-red/10 rounded-lg">
+                          <button
+                            onClick={() => handleDelete(item.id)}
+                            className="p-2 text-gray-500 hover:text-medical-red hover:bg-medical-red/10 rounded-lg"
+                          >
                             <Trash2 className="w-4 h-4" />
                           </button>
                         </div>

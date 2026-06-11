@@ -5,7 +5,7 @@ import type { TaskStatus, TaskPriority } from '../types';
 import Header from '../components/Header';
 
 export default function Tasks() {
-  const { tasks, users, addTask, updateTask } = useStore();
+  const { tasks, users, addTask, updateTask, completeTask } = useStore();
   const [showModal, setShowModal] = useState(false);
   const [formData, setFormData] = useState({
     user_id: '',
@@ -37,7 +37,10 @@ export default function Tasks() {
   };
 
   const handleCompleteTask = (taskId: string) => {
-    updateTask(taskId, { status: 'completed', completed_at: new Date().toISOString().split('T')[0] });
+    const success = completeTask(taskId);
+    if (!success) {
+      return;
+    }
   };
 
   const pendingTasks = tasks.filter(t => t.status === 'pending');

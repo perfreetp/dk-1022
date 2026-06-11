@@ -1,9 +1,9 @@
-import { ClipboardList, AlertCircle, Calendar, CheckCircle } from 'lucide-react';
+import { ClipboardList, AlertCircle, Calendar, CheckCircle, RefreshCw } from 'lucide-react';
 import { useStore } from '../store';
 import Header from '../components/Header';
 
 export default function Dashboard() {
-  const { tasks, schedulings, requests, exceptions, currentUser, users } = useStore();
+  const { tasks, schedulings, requests, exceptions, currentUser, users, handover, confirmHandover, resetHandover } = useStore();
   
   const pendingTasks = tasks.filter(t => t.status === 'pending');
   const todaySchedule = schedulings.find(s => s.date === new Date().toISOString().split('T')[0] && s.user_id === currentUser?.id);
@@ -14,6 +14,16 @@ export default function Dashboard() {
   const getShiftName = (shift: string) => {
     const shiftMap: Record<string, string> = { morning: '早班', afternoon: '中班', night: '晚班' };
     return shiftMap[shift] || shift;
+  };
+
+  const handleConfirmHandover = () => {
+    confirmHandover();
+  };
+
+  const handleResetHandover = () => {
+    if (confirm('确定要重置交接班状态吗？')) {
+      resetHandover();
+    }
   };
 
   return (
@@ -142,28 +152,63 @@ export default function Dashboard() {
         <div className="mt-6 bg-white rounded-xl shadow-sm overflow-hidden">
           <div className="p-4 border-b flex items-center justify-between">
             <h3 className="font-semibold">交接班确认</h3>
-            <button className="px-4 py-2 bg-medical-blue text-white rounded-lg hover:bg-medical-blue/90 transition-colors">
-              <span className="flex items-center">
+            {handover ? (
+              <button
+                onClick={handleResetHandover}
+                className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 flex items-center"
+              >
+                <RefreshCw className="w-4 h-4 mr-2" />
+                重置状态
+              </button>
+            ) : (
+              <button
+                onClick={handleConfirmHandover}
+                className="px-4 py-2 bg-medical-blue text-white rounded-lg hover:bg-medical-blue/90 transition-colors flex items-center"
+              >
                 <CheckCircle className="w-4 h-4 mr-2" />
                 确认交接
-              </span>
-            </button>
+              </button>
+            )}
           </div>
           <div className="p-4">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="p-4 border rounded-lg">
-                <p className="text-sm text-gray-500">交接人</p>
-                <p className="font-medium mt-1">{currentUser?.name}</p>
+            {handover ? (
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div className="p-4 border rounded-lg bg-medical-green/5 border-medical-green/20">
+                  <p className="text-sm text-gray-500">交接状态</p>
+                  <p className="font-medium mt-1 flex items-center">
+                    <CheckCircle className="w-5 h-5 mr-2 text-medical-green" />
+                    已确认
+                  </p>
+                </div>
+                <div className="p-4 border rounded-lg">
+                  <p className="text-sm text-gray-500">交接人</p>
+                  <p className="font-medium mt-1">{handover.user_name}</p>
+                </div>
+                <div className="p-4 border rounded-lg">
+                  <p className="text-sm text-gray-500">交接时间</p>
+                  <p className="font-medium mt-1">{handover.handover_time}</p>
+                </div>
+                <div className="p-4 border rounded-lg">
+                  <p className="text-sm text-gray-500">待办事项</p>
+                  <p className="font-medium mt-1">{handover.pending_tasks} 项</p>
+                </div>
               </div>
-              <div className="p-4 border rounded-lg">
-                <p className="text-sm text-gray-500">交接时间</p>
-                <p className="font-medium mt-1">{new Date().toLocaleString('zh-CN')}</p>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="p-4 border rounded-lg">
+                  <p className="text-sm text-gray-500">交接人</p>
+                  <p className="font-medium mt-1">{currentUser?.name}</p>
+                </div>
+                <div className="p-4 border rounded-lg">
+                  <p className="text-sm text-gray-500">交接时间</p>
+                  <p className="font-medium mt-1">{new Date().toLocaleString('zh-CN')}</p>
+                </div>
+                <div className="p-4 border rounded-lg">
+                  <p className="text-sm text-gray-500">待办事项</p>
+                  <p className="font-medium mt-1">{pendingTasks.length} 项</p>
+                </div>
               </div>
-              <div className="p-4 border rounded-lg">
-                <p className="text-sm text-gray-500">待办事项</p>
-                <p className="font-medium mt-1">{pendingTasks.length} 项</p>
-              </div>
-            </div>
+            )}
           </div>
         </div>
       </main>

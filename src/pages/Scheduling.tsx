@@ -1,13 +1,15 @@
 import { useState } from 'react';
-import { Plus, Edit, Trash2, Calendar, User } from 'lucide-react';
+import { Plus, Edit, Trash2, Calendar, User, Calculator } from 'lucide-react';
 import { useStore } from '../store';
 import type { ShiftType, ScheduleStatus } from '../types';
 import Header from '../components/Header';
 
 export default function Scheduling() {
-  const { schedulings, users, addScheduling, updateScheduling } = useStore();
+  const { schedulings, users, addScheduling, updateScheduling, generateSchedulings } = useStore();
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [showModal, setShowModal] = useState(false);
+  const [showGenerateModal, setShowGenerateModal] = useState(false);
+  const [generateFormData, setGenerateFormData] = useState({ patientCount: 20 });
   const [editingItem, setEditingItem] = useState<typeof schedulings[0] | null>(null);
   const [formData, setFormData] = useState({
     user_id: '',
@@ -38,6 +40,13 @@ export default function Scheduling() {
     setShowModal(false);
     setEditingItem(null);
     setFormData({ user_id: '', date: selectedDate, shift: 'morning', status: 'active' });
+  };
+
+  const handleGenerate = () => {
+    if (generateFormData.patientCount <= 0) return;
+    generateSchedulings(selectedDate, generateFormData.patientCount);
+    setShowGenerateModal(false);
+    setGenerateFormData({ patientCount: 20 });
   };
 
   const handleEdit = (item: typeof schedulings[0]) => {
@@ -78,7 +87,11 @@ export default function Scheduling() {
                 添加排班
               </button>
             </div>
-            <button className="px-4 py-2 border border-medical-blue text-medical-blue rounded-lg hover:bg-medical-blue/5 transition-colors">
+            <button
+              onClick={() => setShowGenerateModal(true)}
+              className="px-4 py-2 border border-medical-blue text-medical-blue rounded-lg hover:bg-medical-blue/5 transition-colors flex items-center"
+            >
+              <Calculator className="w-4 h-4 mr-2" />
               按诊疗量生成班次
             </button>
           </div>
@@ -255,6 +268,48 @@ export default function Scheduling() {
                 className="px-4 py-2 bg-medical-blue text-white rounded-lg hover:bg-medical-blue/90"
               >
                 确定
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {showGenerateModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl p-6 w-full max-w-md">
+            <h3 className="text-lg font-semibold mb-4">按诊疗量生成班次</h3>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">预计诊疗量（人次）</label>
+                <input
+                  type="number"
+                  value={generateFormData.patientCount}
+                  onChange={(e) => setGenerateFormData({ patientCount: parseInt(e.target.value) || 0 })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                  min="1"
+                />
+              </div>
+              <div className="bg-gray-50 p-3 rounded-lg">
+                <p className="text-sm text-gray-600">
+                  根据诊疗量自动计算：早班占40%，中班占40%，晚班占20%
+                </p>
+                <p className="text-sm text-gray-500 mt-1">
+                  每10人次安排1名护士
+                </p>
+              </div>
+            </div>
+            <div className="flex justify-end space-x-3 mt-6">
+              <button
+                onClick={() => setShowGenerateModal(false)}
+                className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+              >
+                取消
+              </button>
+              <button
+                onClick={handleGenerate}
+                className="px-4 py-2 bg-medical-blue text-white rounded-lg hover:bg-medical-blue/90"
+              >
+                生成班次
               </button>
             </div>
           </div>

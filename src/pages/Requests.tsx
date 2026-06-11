@@ -5,7 +5,7 @@ import type { RequestStatus } from '../types';
 import Header from '../components/Header';
 
 export default function Requests() {
-  const { requests, users, inventory, addRequest, updateRequest } = useStore();
+  const { requests, users, inventory, addRequest, updateRequest, issueRequest } = useStore();
   const [showModal, setShowModal] = useState(false);
   const [formData, setFormData] = useState({
     inventory_id: '',
@@ -46,7 +46,10 @@ export default function Requests() {
   };
 
   const handleIssue = (requestId: string) => {
-    updateRequest(requestId, { status: 'issued' });
+    const success = issueRequest(requestId);
+    if (!success) {
+      return;
+    }
   };
 
   const pendingRequests = requests.filter(r => r.status === 'pending');
@@ -119,6 +122,7 @@ export default function Requests() {
                     <th className="px-4 py-3 text-left text-sm font-semibold text-gray-600">申请人</th>
                     <th className="px-4 py-3 text-left text-sm font-semibold text-gray-600">耗材</th>
                     <th className="px-4 py-3 text-left text-sm font-semibold text-gray-600">数量</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-gray-600">当前库存</th>
                     <th className="px-4 py-3 text-left text-sm font-semibold text-gray-600">原因</th>
                     <th className="px-4 py-3 text-left text-sm font-semibold text-gray-600">状态</th>
                     <th className="px-4 py-3 text-left text-sm font-semibold text-gray-600">操作</th>
@@ -141,6 +145,9 @@ export default function Requests() {
                         </td>
                         <td className="px-4 py-3">{item?.name} ({item?.code})</td>
                         <td className="px-4 py-3">{request.quantity} {item?.unit}</td>
+                        <td className={`px-4 py-3 ${item && item.quantity < request.quantity ? 'text-medical-red font-semibold' : ''}`}>
+                          {item?.quantity || 0} {item?.unit}
+                        </td>
                         <td className="px-4 py-3">{request.reason}</td>
                         <td className="px-4 py-3">
                           <span className={`px-2 py-1 text-xs rounded-full ${
@@ -175,7 +182,12 @@ export default function Requests() {
                             {request.status === 'approved' && (
                               <button
                                 onClick={() => handleIssue(request.id)}
-                                className="px-3 py-1 bg-medical-blue text-white text-sm rounded-lg hover:bg-medical-blue/90"
+                                className={`px-3 py-1 text-sm rounded-lg ${
+                                  item && item.quantity >= request.quantity
+                                    ? 'bg-medical-blue text-white hover:bg-medical-blue/90'
+                                    : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                                }`}
+                                disabled={item && item.quantity < request.quantity}
                               >
                                 发放
                               </button>
