@@ -71,6 +71,23 @@ const ENDOSCOPE_CONSUMPTION: Record<string, { name: string; quantity: number }[]
   ],
 };
 
+const loadHandover = (): HandoverRecord | null => {
+  try {
+    const saved = localStorage.getItem('endoscope_handover');
+    if (saved) {
+      const handover = JSON.parse(saved);
+      const today = new Date().toDateString();
+      const handoverDate = new Date(handover.handover_time).toDateString();
+      if (handoverDate === today) {
+        return handover;
+      }
+    }
+  } catch (e) {
+    console.error('Failed to load handover:', e);
+  }
+  return null;
+};
+
 export const useStore = create<Store>((set, get) => ({
   users: mockUsers,
   currentUser: mockUsers[0],
@@ -82,7 +99,7 @@ export const useStore = create<Store>((set, get) => ({
   workloadStats: mockWorkloadStats,
   costStats: mockCostStats,
   monthlyStats: mockMonthlyStats,
-  handover: null,
+  handover: loadHandover(),
 
   setCurrentUser: (user) => set({ currentUser: user }),
 
@@ -98,43 +115,46 @@ export const useStore = create<Store>((set, get) => ({
     const nurses = state.users.filter(u => u.role === 'nurse');
     const shifts: Scheduling[] = [];
     
-    const morningNurses = Math.ceil(patientCount * 0.4 / 10);
-    const afternoonNurses = Math.ceil(patientCount * 0.4 / 10);
+    const morningNurses = Math.max(1, Math.ceil(patientCount * 0.4 / 10));
+    const afternoonNurses = Math.max(1, Math.ceil(patientCount * 0.4 / 10));
     const nightNurses = Math.max(1, Math.ceil(patientCount * 0.2 / 10));
     
-    const totalNursesNeeded = morningNurses + afternoonNurses + nightNurses;
-    const availableNurses = nurses.slice(0, Math.min(totalNursesNeeded, nurses.length));
-    
     let nurseIndex = 0;
-    for (let i = 0; i < morningNurses && nurseIndex < availableNurses.length; i++, nurseIndex++) {
+    for (let i = 0; i < morningNurses; i++) {
+      const nurse = nurseIndex < nurses.length ? nurses[nurseIndex] : null;
       shifts.push({
         id: Date.now().toString() + '-m-' + i,
-        user_id: availableNurses[nurseIndex].id,
+        user_id: nurse?.id || '',
         date,
         shift: 'morning',
-        status: 'active',
+        status: nurse ? 'active' : 'adjusted',
         created_at: new Date().toISOString().split('T')[0],
       });
+      if (nurse) nurseIndex++;
     }
-    for (let i = 0; i < afternoonNurses && nurseIndex < availableNurses.length; i++, nurseIndex++) {
+    for (let i = 0; i < afternoonNurses; i++) {
+      const nurse = nurseIndex < nurses.length ? nurses[nurseIndex] : null;
       shifts.push({
         id: Date.now().toString() + '-a-' + i,
-        user_id: availableNurses[nurseIndex].id,
+        user_id: nurse?.id || '',
         date,
         shift: 'afternoon',
-        status: 'active',
+        status: nurse ? 'active' : 'adjusted',
         created_at: new Date().toISOString().split('T')[0],
       });
+      if (nurse) nurseIndex++;
     }
-    for (let i = 0; i < nightNurses && nurseIndex < availableNurses.length; i++, nurseIndex++) {
+    for (let i = 0; i < nightNurses; i++) {
+      const nurse = nurseIndex < nurses.length ? nurses[nurseIndex] : null;
       shifts.push({
         id: Date.now().toString() + '-n-' + i,
-        user_id: availableNurses[nurseIndex].id,
+        user_id: nurse?.id || '',
         date,
         shift: 'night',
-        status: 'active',
+        status: nurse ? 'active' : 'adjusted',
         created_at: new Date().toISOString().split('T')[0],
       });
+      if (nurse) nurseIndex++;
     }
     
     const existingSchedulings = state.schedulings.filter(s => s.date !== date);
@@ -177,17 +197,32 @@ export const useStore = create<Store>((set, get) => ({
         return i;
       });
 
-      const newCostStats = state.costStats.map(cs => {
-        const consumptionItem = consumption.find(c => c.name === cs.inventory_name);
-        if (consumptionItem) {
-          return {
-            ...cs,
-            total_quantity: cs.total_quantity + consumptionItem.quantity,
-            total_cost: cs.total_cost + (consumptionItem.quantity * (state.inventory.find(i => i.name === cs.inventory_name)?.price || 0)),
-          };
+      let newCostStats = [...state.costStats];
+        
+        for (const item of consumption) {
+          const existingStat = newCostStats.find(cs => cs.inventory_name === item.name);
+          if (existingStat) {
+            newCostStats = newCostStats.map(cs => {
+              if (cs.inventory_name === item.name) {
+                const inventoryItem = state.inventory.find(i => i.name === item.name);
+                return {
+                  ...cs,
+                  total_quantity: cs.total_quantity + item.quantity,
+                  total_cost: cs.total_cost + (item.quantity * (inventoryItem?.price || 0)),
+                };
+              }
+              return cs;
+            });
+          } else {
+            const inventoryItem = state.inventory.find(i => i.name === item.name);
+            newCostStats.push({
+              inventory_id: inventoryItem?.id || '',
+              inventory_name: item.name,
+              total_quantity: item.quantity,
+              total_cost: item.quantity * (inventoryItem?.price || 0),
+            });
+          }
         }
-        return cs;
-      });
 
       return {
         inventory: newInventory,
@@ -261,17 +296,20 @@ export const useStore = create<Store>((set, get) => ({
   confirmHandover: () => {
     const state = get();
     const pendingTasks = state.tasks.filter(t => t.status === 'pending').length;
-    set({
-      handover: {
-        id: Date.now().toString(),
-        user_id: state.currentUser?.id || '',
-        user_name: state.currentUser?.name || '',
-        handover_time: new Date().toLocaleString('zh-CN'),
-        pending_tasks: pendingTasks,
-        confirmed: true,
-      }
-    });
+    const handoverRecord: HandoverRecord = {
+      id: Date.now().toString(),
+      user_id: state.currentUser?.id || '',
+      user_name: state.currentUser?.name || '',
+      handover_time: new Date().toLocaleString('zh-CN'),
+      pending_tasks: pendingTasks,
+      confirmed: true,
+    };
+    localStorage.setItem('endoscope_handover', JSON.stringify(handoverRecord));
+    set({ handover: handoverRecord });
   },
 
-  resetHandover: () => set({ handover: null }),
+  resetHandover: () => {
+    localStorage.removeItem('endoscope_handover');
+    set({ handover: null });
+  },
 }));

@@ -52,6 +52,7 @@ export const mockCostStats: CostStats[] = [
   { inventory_id: '1', inventory_name: '内镜清洗液', total_quantity: 50, total_cost: 2500 },
   { inventory_id: '2', inventory_name: '消毒湿巾', total_quantity: 200, total_cost: 3000 },
   { inventory_id: '3', inventory_name: '一次性手套', total_quantity: 100, total_cost: 3000 },
+  { inventory_id: '4', inventory_name: '内镜润滑剂', total_quantity: 20, total_cost: 1600 },
 ];
 
 export const mockMonthlyStats: MonthlyStats[] = [
