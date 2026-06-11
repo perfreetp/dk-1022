@@ -1,10 +1,10 @@
 import { useState } from 'react';
-import { Plus, Edit, Trash2, Download, AlertTriangle, Package } from 'lucide-react';
+import { Plus, Edit, Trash2, Download, AlertTriangle, Package, History } from 'lucide-react';
 import { useStore } from '../store';
 import Header from '../components/Header';
 
 export default function Inventory() {
-  const { inventory, addInventory, updateInventory, deleteInventory } = useStore();
+  const { inventory, addInventory, updateInventory, deleteInventory, inventoryFlows } = useStore();
   const [showModal, setShowModal] = useState(false);
   const [editingItem, setEditingItem] = useState<typeof inventory[0] | null>(null);
   const [formData, setFormData] = useState({
@@ -260,6 +260,63 @@ export default function Inventory() {
             </div>
           </div>
         )}
+        
+        <div className="mt-6 bg-white rounded-xl shadow-sm overflow-hidden">
+          <div className="p-4 border-b">
+            <h3 className="font-semibold flex items-center">
+              <History className="w-5 h-5 mr-2" />
+              库存流水
+            </h3>
+          </div>
+          <div className="p-4">
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="bg-gray-50">
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-gray-600">时间</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-gray-600">耗材名称</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-gray-600">批号</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-gray-600">数量</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-gray-600">类型</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-gray-600">来源</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {inventoryFlows.length > 0 ? (
+                    [...inventoryFlows].reverse().map(flow => (
+                      <tr key={flow.id} className="border-b">
+                        <td className="px-4 py-3 text-sm">
+                          {new Date(flow.created_at).toLocaleString('zh-CN')}
+                        </td>
+                        <td className="px-4 py-3 text-sm">{flow.inventory_name}</td>
+                        <td className="px-4 py-3 text-sm">{flow.batch_no}</td>
+                        <td className={`px-4 py-3 text-sm ${flow.quantity > 0 ? 'text-medical-green' : 'text-medical-red'}`}>
+                          {flow.quantity > 0 ? '+' : ''}{flow.quantity}
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className={`px-2 py-1 text-xs rounded-full ${
+                            flow.type === 'inventory' ? 'bg-medical-green/20 text-medical-green' :
+                            flow.type === 'consumption' ? 'bg-medical-orange/20 text-medical-orange' :
+                            'bg-medical-blue/20 text-medical-blue'
+                          }`}>
+                            {flow.type === 'inventory' ? '入库' : flow.type === 'consumption' ? '洗消扣减' : '领用发放'}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-sm">{flow.source}</td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan={6} className="px-4 py-8 text-center text-gray-500">
+                        暂无库存流水记录
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
       </main>
       
       {showModal && (

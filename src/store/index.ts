@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { User, Scheduling, Task, Inventory, Request, Exception, WorkloadStats, CostStats, MonthlyStats, EndoscopeCostStats } from '../types';
+import type { User, Scheduling, Task, Inventory, Request, Exception, WorkloadStats, CostStats, MonthlyStats, EndoscopeCostStats, TaskConsumption, InventoryFlow } from '../types';
 import { mockUsers, mockSchedulings, mockTasks, mockInventory, mockRequests, mockExceptions, mockWorkloadStats, mockCostStats, mockMonthlyStats } from '../data/mockData';
 
 export interface HandoverRecord {
@@ -22,6 +22,8 @@ interface Store {
   workloadStats: WorkloadStats[];
   costStats: CostStats[];
   endoscopeCostStats: EndoscopeCostStats[];
+  taskConsumptions: TaskConsumption[];
+  inventoryFlows: InventoryFlow[];
   monthlyStats: MonthlyStats[];
   handover: HandoverRecord | null;
 
@@ -89,10 +91,26 @@ const loadHandover = (): HandoverRecord | null => {
   return null;
 };
 
+const loadSchedulings = (): Scheduling[] => {
+  try {
+    const saved = localStorage.getItem('endoscope_schedulings');
+    if (saved) {
+      return JSON.parse(saved);
+    }
+  } catch (e) {
+    console.error('Failed to load schedulings:', e);
+  }
+  return mockSchedulings;
+};
+
+const saveSchedulings = (schedulings: Scheduling[]) => {
+  localStorage.setItem('endoscope_schedulings', JSON.stringify(schedulings));
+};
+
 export const useStore = create<Store>((set, get) => ({
   users: mockUsers,
   currentUser: mockUsers[0],
-  schedulings: mockSchedulings,
+  schedulings: loadSchedulings(),
   tasks: mockTasks,
   inventory: mockInventory,
   requests: mockRequests,
@@ -116,18 +134,24 @@ export const useStore = create<Store>((set, get) => ({
       consumptions: [],
     },
   ],
+  taskConsumptions: [],
+  inventoryFlows: [],
   monthlyStats: mockMonthlyStats,
   handover: loadHandover(),
 
   setCurrentUser: (user) => set({ currentUser: user }),
 
-  addScheduling: (scheduling) => set((state) => ({
-    schedulings: [...state.schedulings, { ...scheduling, id: Date.now().toString(), created_at: new Date().toISOString().split('T')[0] }]
-  })),
+  addScheduling: (scheduling) => set((state) => {
+    const newSchedulings = [...state.schedulings, { ...scheduling, id: Date.now().toString(), created_at: new Date().toISOString().split('T')[0] }];
+    saveSchedulings(newSchedulings);
+    return { schedulings: newSchedulings };
+  }),
   
-  updateScheduling: (id, updates) => set((state) => ({
-    schedulings: state.schedulings.map(s => s.id === id ? { ...s, ...updates } : s)
-  })),
+  updateScheduling: (id, updates) => set((state) => {
+    const newSchedulings = state.schedulings.map(s => s.id === id ? { ...s, ...updates } : s);
+    saveSchedulings(newSchedulings);
+    return { schedulings: newSchedulings };
+  }),
 
   generateSchedulings: (date, patientCount) => set((state) => {
     const nurses = state.users.filter(u => u.role === 'nurse');
@@ -209,7 +233,9 @@ export const useStore = create<Store>((set, get) => ({
     }
     
     const existingSchedulings = state.schedulings.filter(s => s.date !== date);
-    return { schedulings: [...existingSchedulings, ...shifts] };
+    const newSchedulings = [...existingSchedulings, ...shifts];
+    saveSchedulings(newSchedulings);
+    return { schedulings: newSchedulings };
   }),
 
   addTask: (task) => set((state) => ({
@@ -244,6 +270,8 @@ export const useStore = create<Store>((set, get) => ({
     set((state) => {
       let newInventory = [...state.inventory];
       let totalCostAdded = 0;
+      const newFlows: InventoryFlow[] = [];
+      const now = new Date().toISOString();
 
       for (const item of consumption) {
         let remaining = item.quantity;
@@ -256,6 +284,18 @@ export const useStore = create<Store>((set, get) => ({
           
           const deductAmount = Math.min(remaining, batch.quantity);
           totalCostAdded += deductAmount * batch.price;
+          
+          newFlows.push({
+            id: Date.now().toString() + '-' + batch.id,
+            inventory_id: batch.id,
+            inventory_name: batch.name,
+            batch_no: batch.batch_no,
+            quantity: -deductAmount,
+            type: 'consumption',
+            source: '洗消任务',
+            source_id: taskId,
+            created_at: now,
+          });
           
           newInventory = newInventory.map(i => {
             if (i.id === batch.id) {
@@ -338,20 +378,60 @@ export const useStore = create<Store>((set, get) => ({
         return ecs;
       });
 
+      const completedAt = new Date().toISOString().split('T')[0];
+      const taskConsumptionItems = consumption.map(item => {
+        const inventoryItem = state.inventory.find(i => i.name === item.name);
+        const itemCost = item.quantity * (inventoryItem?.price || 0);
+        return {
+          inventory_id: inventoryItem?.id || '',
+          inventory_name: item.name,
+          quantity: item.quantity,
+          unit_cost: inventoryItem?.price || 0,
+          total_cost: itemCost,
+        };
+      });
+      const taskTotalCost = taskConsumptionItems.reduce((sum, item) => sum + item.total_cost, 0);
+      
+      const newTaskConsumption: TaskConsumption = {
+        task_id: taskId,
+        task_name: task.name,
+        endoscope_type: endoscopeType,
+        completed_at: completedAt,
+        consumptions: taskConsumptionItems,
+        total_cost: taskTotalCost,
+      };
+
       return {
         inventory: newInventory,
         costStats: newCostStats,
         endoscopeCostStats: newEndoscopeCostStats,
-        tasks: state.tasks.map(t => t.id === taskId ? { ...t, status: 'completed' as const, completed_at: new Date().toISOString().split('T')[0] } : t),
+        taskConsumptions: [...state.taskConsumptions, newTaskConsumption],
+        inventoryFlows: [...state.inventoryFlows, ...newFlows],
+        tasks: state.tasks.map(t => t.id === taskId ? { ...t, status: 'completed' as const, completed_at: completedAt } : t),
       };
     });
 
     return true;
   },
 
-  addInventory: (item) => set((state) => ({
-    inventory: [...state.inventory, { ...item, id: Date.now().toString(), created_at: new Date().toISOString().split('T')[0] }]
-  })),
+  addInventory: (item) => set((state) => {
+    const now = new Date().toISOString();
+    const newId = Date.now().toString();
+    return {
+      inventory: [...state.inventory, { ...item, id: newId, created_at: new Date().toISOString().split('T')[0] }],
+      inventoryFlows: [...state.inventoryFlows, {
+        id: Date.now().toString(),
+        inventory_id: newId,
+        inventory_name: item.name,
+        batch_no: item.batch_no,
+        quantity: item.quantity,
+        type: 'inventory',
+        source: '手工入库',
+        source_id: '',
+        created_at: now,
+      }],
+    };
+  }),
   
   updateInventory: (id, updates) => set((state) => ({
     inventory: state.inventory.map(i => i.id === id ? { ...i, ...updates } : i)
@@ -386,16 +466,65 @@ export const useStore = create<Store>((set, get) => ({
     const request = state.requests.find(r => r.id === requestId);
     if (!request) return false;
 
-    const item = state.inventory.find(i => i.id === request.inventory_id);
-    if (!item || item.quantity < request.quantity) {
-      alert(`库存不足：${item?.name} 需要 ${request.quantity}，当前库存 ${item?.quantity || 0}`);
+    const inventoryItem = state.inventory.find(i => i.id === request.inventory_id);
+    if (!inventoryItem) return false;
+
+    const itemName = inventoryItem.name;
+    const totalStock = state.inventory
+      .filter(i => i.name === itemName)
+      .reduce((sum, i) => sum + i.quantity, 0);
+
+    if (totalStock < request.quantity) {
+      alert(`库存不足：${itemName} 需要 ${request.quantity}，当前库存 ${totalStock}`);
       return false;
     }
 
-    set((state) => ({
-      inventory: state.inventory.map(i => i.id === request.inventory_id ? { ...i, quantity: i.quantity - request.quantity } : i),
-      requests: state.requests.map(r => r.id === requestId ? { ...r, status: 'issued' as const } : r),
-    }));
+    set((state) => {
+      let newInventory = [...state.inventory];
+      let remaining = request.quantity;
+      const newFlows: InventoryFlow[] = [];
+      const now = new Date().toISOString();
+      
+      const sortedBatches = newInventory
+        .filter(i => i.name === itemName)
+        .sort((a, b) => a.expire_date.localeCompare(b.expire_date));
+
+      for (const batch of sortedBatches) {
+        if (remaining <= 0) break;
+        
+        const deductAmount = Math.min(remaining, batch.quantity);
+        
+        newFlows.push({
+          id: Date.now().toString() + '-' + batch.id,
+          inventory_id: batch.id,
+          inventory_name: batch.name,
+          batch_no: batch.batch_no,
+          quantity: -deductAmount,
+          type: 'issue',
+          source: '领用发放',
+          source_id: requestId,
+          created_at: now,
+        });
+        
+        newInventory = newInventory.map(i => {
+          if (i.id === batch.id) {
+            const newQuantity = i.quantity - deductAmount;
+            return { ...i, quantity: newQuantity };
+          }
+          return i;
+        });
+        
+        remaining -= deductAmount;
+      }
+      
+      newInventory = newInventory.filter(i => i.quantity > 0);
+
+      return {
+        inventory: newInventory,
+        inventoryFlows: [...state.inventoryFlows, ...newFlows],
+        requests: state.requests.map(r => r.id === requestId ? { ...r, status: 'issued' as const } : r),
+      };
+    });
 
     return true;
   },

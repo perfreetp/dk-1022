@@ -4,8 +4,9 @@ import { useStore } from '../store';
 import Header from '../components/Header';
 
 export default function Statistics() {
-  const { workloadStats, costStats, monthlyStats, tasks, endoscopeCostStats } = useStore();
+  const { workloadStats, costStats, monthlyStats, tasks, endoscopeCostStats, taskConsumptions } = useStore();
   const [expandedEndoscope, setExpandedEndoscope] = useState<string | null>('胃镜');
+  const [expandedTaskType, setExpandedTaskType] = useState<string | null>(null);
 
   const completedTasks = tasks.filter(t => t.status === 'completed').length;
   const totalTasks = tasks.length;
@@ -13,6 +14,20 @@ export default function Statistics() {
   
   const toggleEndoscope = (type: string) => {
     setExpandedEndoscope(expandedEndoscope === type ? null : type);
+  };
+  
+  const toggleTaskType = (type: string) => {
+    setExpandedTaskType(expandedTaskType === type ? null : type);
+  };
+  
+  const getEndoscopeAverageCost = (type: string) => {
+    const tasks = taskConsumptions.filter(tc => tc.endoscope_type === type);
+    if (tasks.length === 0) return 0;
+    return tasks.reduce((sum, tc) => sum + tc.total_cost, 0) / tasks.length;
+  };
+  
+  const getEndoscopeTasks = (type: string) => {
+    return taskConsumptions.filter(tc => tc.endoscope_type === type).slice(-10).reverse();
   };
 
   return (
@@ -111,10 +126,13 @@ export default function Statistics() {
                     className="p-4 bg-gray-50 cursor-pointer flex items-center justify-between hover:bg-gray-100 transition-colors"
                     onClick={() => toggleEndoscope(stat.endoscope_type)}
                   >
-                    <div className="flex items-center">
-                      <span className="font-medium mr-2">{stat.endoscope_type}</span>
+                    <div className="flex items-center space-x-4">
+                      <span className="font-medium">{stat.endoscope_type}</span>
                       <span className="text-sm text-gray-500">
                         总成本: {stat.total_cost.toFixed(2)} 元
+                      </span>
+                      <span className="text-sm text-medical-blue font-medium">
+                        平均: {getEndoscopeAverageCost(stat.endoscope_type).toFixed(2)} 元/镜
                       </span>
                     </div>
                     {expandedEndoscope === stat.endoscope_type ? (
@@ -157,6 +175,77 @@ export default function Statistics() {
                   )}
                 </div>
               ))}
+            </div>
+          </div>
+        </div>
+        
+        <div className="mt-6 bg-white rounded-xl shadow-sm overflow-hidden">
+          <div className="p-4 border-b">
+            <h3 className="font-semibold">任务消耗明细</h3>
+          </div>
+          <div className="p-4">
+            <div className="space-y-4">
+              {['胃镜', '肠镜', '支气管镜'].map(type => {
+                const tasks = getEndoscopeTasks(type);
+                return (
+                  <div key={type} className="border rounded-lg overflow-hidden">
+                    <div 
+                      className="p-4 bg-gray-50 cursor-pointer flex items-center justify-between hover:bg-gray-100 transition-colors"
+                      onClick={() => toggleTaskType(type)}
+                    >
+                      <div className="flex items-center">
+                        <span className="font-medium mr-2">{type}</span>
+                        <span className="text-sm text-gray-500">
+                          最近完成: {tasks.length} 个任务
+                        </span>
+                      </div>
+                      {expandedTaskType === type ? (
+                        <ChevronUp className="w-5 h-5 text-gray-500" />
+                      ) : (
+                        <ChevronDown className="w-5 h-5 text-gray-500" />
+                      )}
+                    </div>
+                    {expandedTaskType === type && (
+                      <div className="p-4">
+                        {tasks.length > 0 ? (
+                          <div className="space-y-3">
+                            {tasks.map((task, index) => (
+                              <div key={index} className="border rounded-lg p-3">
+                                <div className="flex items-center justify-between mb-2">
+                                  <span className="font-medium text-sm">{task.task_name}</span>
+                                  <span className="text-sm text-medical-orange">成本: {task.total_cost.toFixed(2)} 元</span>
+                                </div>
+                                <table className="w-full text-xs">
+                                  <thead>
+                                    <tr className="bg-gray-50">
+                                      <th className="px-3 py-1 text-left">耗材</th>
+                                      <th className="px-3 py-1 text-left">数量</th>
+                                      <th className="px-3 py-1 text-left">单价</th>
+                                      <th className="px-3 py-1 text-left">成本</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {task.consumptions.map((c, ci) => (
+                                      <tr key={ci}>
+                                        <td className="px-3 py-1">{c.inventory_name}</td>
+                                        <td className="px-3 py-1">{c.quantity}</td>
+                                        <td className="px-3 py-1">{c.unit_cost.toFixed(2)}</td>
+                                        <td className="px-3 py-1">{c.total_cost.toFixed(2)}</td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="text-center text-gray-500 text-sm py-4">暂无任务记录</p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>

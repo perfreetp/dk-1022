@@ -69,6 +69,35 @@ export interface Consumption {
   created_at: string;
 }
 
+export interface TaskConsumption {
+  task_id: string;
+  task_name: string;
+  endoscope_type: string;
+  completed_at: string;
+  consumptions: {
+    inventory_id: string;
+    inventory_name: string;
+    quantity: number;
+    unit_cost: number;
+    total_cost: number;
+  }[];
+  total_cost: number;
+}
+
+export type InventoryFlowType = 'consumption' | 'issue' | 'inventory';
+
+export interface InventoryFlow {
+  id: string;
+  inventory_id: string;
+  inventory_name: string;
+  batch_no: string;
+  quantity: number;
+  type: InventoryFlowType;
+  source: string;
+  source_id: string;
+  created_at: string;
+}
+
 export type ExceptionStatus = 'pending' | 'handled';
 
 export interface Exception {
