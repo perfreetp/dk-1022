@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { User, Scheduling, Task, Inventory, Request, Exception, WorkloadStats, CostStats, MonthlyStats } from '../types';
+import type { User, Scheduling, Task, Inventory, Request, Exception, WorkloadStats, CostStats, MonthlyStats, EndoscopeCostStats } from '../types';
 import { mockUsers, mockSchedulings, mockTasks, mockInventory, mockRequests, mockExceptions, mockWorkloadStats, mockCostStats, mockMonthlyStats } from '../data/mockData';
 
 export interface HandoverRecord {
@@ -21,6 +21,7 @@ interface Store {
   exceptions: Exception[];
   workloadStats: WorkloadStats[];
   costStats: CostStats[];
+  endoscopeCostStats: EndoscopeCostStats[];
   monthlyStats: MonthlyStats[];
   handover: HandoverRecord | null;
 
@@ -98,6 +99,23 @@ export const useStore = create<Store>((set, get) => ({
   exceptions: mockExceptions,
   workloadStats: mockWorkloadStats,
   costStats: mockCostStats,
+  endoscopeCostStats: [
+    {
+      endoscope_type: '胃镜',
+      total_cost: 0,
+      consumptions: [],
+    },
+    {
+      endoscope_type: '肠镜',
+      total_cost: 0,
+      consumptions: [],
+    },
+    {
+      endoscope_type: '支气管镜',
+      total_cost: 0,
+      consumptions: [],
+    },
+  ],
   monthlyStats: mockMonthlyStats,
   handover: loadHandover(),
 
@@ -113,48 +131,81 @@ export const useStore = create<Store>((set, get) => ({
 
   generateSchedulings: (date, patientCount) => set((state) => {
     const nurses = state.users.filter(u => u.role === 'nurse');
+    const positions: ('cleaning' | 'disinfection' | 'registration' | 'patrol')[] = ['cleaning', 'disinfection', 'registration', 'patrol'];
     const shifts: Scheduling[] = [];
     
     const morningNurses = Math.max(1, Math.ceil(patientCount * 0.4 / 10));
     const afternoonNurses = Math.max(1, Math.ceil(patientCount * 0.4 / 10));
     const nightNurses = Math.max(1, Math.ceil(patientCount * 0.2 / 10));
     
+    const getNurseLastPosition = (nurseId: string): string | null => {
+      const recentSchedulings = state.schedulings
+        .filter(s => s.user_id === nurseId && s.date < date)
+        .sort((a, b) => b.date.localeCompare(a.date));
+      return recentSchedulings.length > 0 ? recentSchedulings[0].position : null;
+    };
+    
+    const getNextPosition = (lastPosition: string | null): 'cleaning' | 'disinfection' | 'registration' | 'patrol' => {
+      if (!lastPosition) return positions[0];
+      const currentIndex = positions.indexOf(lastPosition as any);
+      return positions[(currentIndex + 1) % positions.length];
+    };
+    
     let nurseIndex = 0;
+    let positionIndex = 0;
+    
     for (let i = 0; i < morningNurses; i++) {
       const nurse = nurseIndex < nurses.length ? nurses[nurseIndex] : null;
+      const lastPosition = nurse ? getNurseLastPosition(nurse.id) : null;
+      const position = nurse ? getNextPosition(lastPosition) : positions[positionIndex % positions.length];
+      
       shifts.push({
         id: Date.now().toString() + '-m-' + i,
         user_id: nurse?.id || '',
         date,
         shift: 'morning',
+        position,
         status: nurse ? 'active' : 'adjusted',
         created_at: new Date().toISOString().split('T')[0],
       });
       if (nurse) nurseIndex++;
+      positionIndex++;
     }
+    
     for (let i = 0; i < afternoonNurses; i++) {
       const nurse = nurseIndex < nurses.length ? nurses[nurseIndex] : null;
+      const lastPosition = nurse ? getNurseLastPosition(nurse.id) : null;
+      const position = nurse ? getNextPosition(lastPosition) : positions[positionIndex % positions.length];
+      
       shifts.push({
         id: Date.now().toString() + '-a-' + i,
         user_id: nurse?.id || '',
         date,
         shift: 'afternoon',
+        position,
         status: nurse ? 'active' : 'adjusted',
         created_at: new Date().toISOString().split('T')[0],
       });
       if (nurse) nurseIndex++;
+      positionIndex++;
     }
+    
     for (let i = 0; i < nightNurses; i++) {
       const nurse = nurseIndex < nurses.length ? nurses[nurseIndex] : null;
+      const lastPosition = nurse ? getNurseLastPosition(nurse.id) : null;
+      const position = nurse ? getNextPosition(lastPosition) : positions[positionIndex % positions.length];
+      
       shifts.push({
         id: Date.now().toString() + '-n-' + i,
         user_id: nurse?.id || '',
         date,
         shift: 'night',
+        position,
         status: nurse ? 'active' : 'adjusted',
         created_at: new Date().toISOString().split('T')[0],
       });
       if (nurse) nurseIndex++;
+      positionIndex++;
     }
     
     const existingSchedulings = state.schedulings.filter(s => s.date !== date);
@@ -181,52 +232,116 @@ export const useStore = create<Store>((set, get) => ({
     const consumption = ENDOSCOPE_CONSUMPTION[endoscopeType] || ENDOSCOPE_CONSUMPTION['胃镜'];
     
     for (const item of consumption) {
-      const inventoryItem = state.inventory.find(i => i.name === item.name);
-      if (!inventoryItem || inventoryItem.quantity < item.quantity) {
-        alert(`库存不足：${item.name} 需要 ${item.quantity}，当前库存 ${inventoryItem?.quantity || 0}`);
+      const totalStock = state.inventory
+        .filter(i => i.name === item.name)
+        .reduce((sum, i) => sum + i.quantity, 0);
+      if (totalStock < item.quantity) {
+        alert(`库存不足：${item.name} 需要 ${item.quantity}，当前库存 ${totalStock}`);
         return false;
       }
     }
 
     set((state) => {
-      const newInventory = state.inventory.map(i => {
-        const consumptionItem = consumption.find(c => c.name === i.name);
-        if (consumptionItem) {
-          return { ...i, quantity: i.quantity - consumptionItem.quantity };
+      let newInventory = [...state.inventory];
+      let totalCostAdded = 0;
+
+      for (const item of consumption) {
+        let remaining = item.quantity;
+        const sortedBatches = newInventory
+          .filter(i => i.name === item.name)
+          .sort((a, b) => a.expire_date.localeCompare(b.expire_date));
+
+        for (const batch of sortedBatches) {
+          if (remaining <= 0) break;
+          
+          const deductAmount = Math.min(remaining, batch.quantity);
+          totalCostAdded += deductAmount * batch.price;
+          
+          newInventory = newInventory.map(i => {
+            if (i.id === batch.id) {
+              const newQuantity = i.quantity - deductAmount;
+              return { ...i, quantity: newQuantity };
+            }
+            return i;
+          });
+          
+          remaining -= deductAmount;
         }
-        return i;
-      });
+        
+        newInventory = newInventory.filter(i => i.quantity > 0);
+      }
 
       let newCostStats = [...state.costStats];
         
-        for (const item of consumption) {
-          const existingStat = newCostStats.find(cs => cs.inventory_name === item.name);
-          if (existingStat) {
-            newCostStats = newCostStats.map(cs => {
-              if (cs.inventory_name === item.name) {
-                const inventoryItem = state.inventory.find(i => i.name === item.name);
-                return {
-                  ...cs,
-                  total_quantity: cs.total_quantity + item.quantity,
-                  total_cost: cs.total_cost + (item.quantity * (inventoryItem?.price || 0)),
-                };
-              }
-              return cs;
-            });
-          } else {
-            const inventoryItem = state.inventory.find(i => i.name === item.name);
-            newCostStats.push({
-              inventory_id: inventoryItem?.id || '',
-              inventory_name: item.name,
-              total_quantity: item.quantity,
-              total_cost: item.quantity * (inventoryItem?.price || 0),
-            });
-          }
+      for (const item of consumption) {
+        const existingStat = newCostStats.find(cs => cs.inventory_name === item.name);
+        if (existingStat) {
+          newCostStats = newCostStats.map(cs => {
+            if (cs.inventory_name === item.name) {
+              const inventoryItem = state.inventory.find(i => i.name === item.name);
+              return {
+                ...cs,
+                total_quantity: cs.total_quantity + item.quantity,
+                total_cost: cs.total_cost + (item.quantity * (inventoryItem?.price || 0)),
+              };
+            }
+            return cs;
+          });
+        } else {
+          const inventoryItem = state.inventory.find(i => i.name === item.name);
+          newCostStats.push({
+            inventory_id: inventoryItem?.id || '',
+            inventory_name: item.name,
+            total_quantity: item.quantity,
+            total_cost: item.quantity * (inventoryItem?.price || 0),
+          });
         }
+      }
+
+      let newEndoscopeCostStats = [...state.endoscopeCostStats];
+    
+      newEndoscopeCostStats = newEndoscopeCostStats.map(ecs => {
+        if (ecs.endoscope_type === endoscopeType) {
+          const updatedConsumptions = [...ecs.consumptions];
+          let totalCost = ecs.total_cost;
+          
+          for (const item of consumption) {
+            const existingConsumption = updatedConsumptions.find(c => c.inventory_name === item.name);
+            const inventoryItem = state.inventory.find(i => i.name === item.name);
+            const itemCost = item.quantity * (inventoryItem?.price || 0);
+            
+            if (existingConsumption) {
+              updatedConsumptions.forEach(c => {
+                if (c.inventory_name === item.name) {
+                  c.quantity += item.quantity;
+                  c.total_cost += itemCost;
+                }
+              });
+            } else {
+              updatedConsumptions.push({
+                inventory_id: inventoryItem?.id || '',
+                inventory_name: item.name,
+                quantity: item.quantity,
+                unit_cost: inventoryItem?.price || 0,
+                total_cost: itemCost,
+              });
+            }
+            totalCost += itemCost;
+          }
+          
+          return {
+            ...ecs,
+            total_cost: totalCost,
+            consumptions: updatedConsumptions,
+          };
+        }
+        return ecs;
+      });
 
       return {
         inventory: newInventory,
         costStats: newCostStats,
+        endoscopeCostStats: newEndoscopeCostStats,
         tasks: state.tasks.map(t => t.id === taskId ? { ...t, status: 'completed' as const, completed_at: new Date().toISOString().split('T')[0] } : t),
       };
     });

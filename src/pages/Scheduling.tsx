@@ -1,8 +1,15 @@
 import { useState } from 'react';
 import { Plus, Edit, Trash2, Calendar, User, Calculator } from 'lucide-react';
 import { useStore } from '../store';
-import type { ShiftType, ScheduleStatus } from '../types';
+import type { ShiftType, ScheduleStatus, PositionType } from '../types';
 import Header from '../components/Header';
+
+const positionMap: Record<PositionType, string> = {
+  cleaning: '清洗',
+  disinfection: '消毒',
+  registration: '登记',
+  patrol: '巡回',
+};
 
 export default function Scheduling() {
   const { schedulings, users, addScheduling, updateScheduling, generateSchedulings } = useStore();
@@ -15,6 +22,7 @@ export default function Scheduling() {
     user_id: '',
     date: selectedDate,
     shift: 'morning' as ShiftType,
+    position: 'cleaning' as PositionType,
     status: 'active' as ScheduleStatus,
   });
 
@@ -39,7 +47,7 @@ export default function Scheduling() {
     }
     setShowModal(false);
     setEditingItem(null);
-    setFormData({ user_id: '', date: selectedDate, shift: 'morning', status: 'active' });
+    setFormData({ user_id: '', date: selectedDate, shift: 'morning', position: 'cleaning', status: 'active' });
   };
 
   const handleGenerate = () => {
@@ -55,6 +63,7 @@ export default function Scheduling() {
       user_id: item.user_id,
       date: item.date,
       shift: item.shift,
+      position: item.position,
       status: item.status,
     });
     setShowModal(true);
@@ -103,6 +112,7 @@ export default function Scheduling() {
                   <tr className="bg-gray-50">
                     <th className="px-4 py-3 text-left text-sm font-semibold text-gray-600">护士</th>
                     <th className="px-4 py-3 text-left text-sm font-semibold text-gray-600">班次</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-gray-600">岗位</th>
                     <th className="px-4 py-3 text-left text-sm font-semibold text-gray-600">状态</th>
                     <th className="px-4 py-3 text-left text-sm font-semibold text-gray-600">操作</th>
                   </tr>
@@ -116,10 +126,15 @@ export default function Scheduling() {
                             <div className="w-8 h-8 rounded-full bg-medical-blue/10 flex items-center justify-center mr-3">
                               <User className="w-4 h-4 text-medical-blue" />
                             </div>
-                            <span>{users.find(u => u.id === schedule.user_id)?.name}</span>
+                            <span>{users.find(u => u.id === schedule.user_id)?.name || '待分配'}</span>
                           </div>
                         </td>
                         <td className="px-4 py-3">{getShiftName(schedule.shift)}</td>
+                        <td className="px-4 py-3">
+                          <span className="px-2 py-1 text-xs rounded-full bg-medical-blue/20 text-medical-blue">
+                            {positionMap[schedule.position]}
+                          </span>
+                        </td>
                         <td className="px-4 py-3">
                           <span className={`px-2 py-1 text-xs rounded-full ${
                             schedule.status === 'active' ? 'bg-medical-green/20 text-medical-green' :
@@ -146,7 +161,7 @@ export default function Scheduling() {
                     ))
                   ) : (
                     <tr>
-                      <td colSpan={4} className="px-4 py-8 text-center text-gray-500">
+                      <td colSpan={5} className="px-4 py-8 text-center text-gray-500">
                         该日期暂无排班安排
                       </td>
                     </tr>
@@ -238,6 +253,19 @@ export default function Scheduling() {
                   <option value="morning">早班</option>
                   <option value="afternoon">中班</option>
                   <option value="night">晚班</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">岗位</label>
+                <select
+                  value={formData.position}
+                  onChange={(e) => setFormData({ ...formData, position: e.target.value as PositionType })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                >
+                  <option value="cleaning">清洗</option>
+                  <option value="disinfection">消毒</option>
+                  <option value="registration">登记</option>
+                  <option value="patrol">巡回</option>
                 </select>
               </div>
               <div>

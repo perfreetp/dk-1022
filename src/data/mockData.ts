@@ -11,10 +11,10 @@ const today = new Date().toISOString().split('T')[0];
 const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
 export const mockSchedulings: Scheduling[] = [
-  { id: '1', user_id: '1', date: today, shift: 'morning', status: 'active', created_at: today },
-  { id: '2', user_id: '2', date: today, shift: 'afternoon', status: 'active', created_at: today },
-  { id: '3', user_id: '1', date: tomorrow, shift: 'afternoon', status: 'active', created_at: today },
-  { id: '4', user_id: '2', date: tomorrow, shift: 'morning', status: 'leave', created_at: today },
+  { id: '1', user_id: '1', date: today, shift: 'morning', position: 'cleaning', status: 'active', created_at: today },
+  { id: '2', user_id: '2', date: today, shift: 'afternoon', position: 'disinfection', status: 'active', created_at: today },
+  { id: '3', user_id: '1', date: tomorrow, shift: 'afternoon', position: 'registration', status: 'active', created_at: today },
+  { id: '4', user_id: '2', date: tomorrow, shift: 'morning', position: 'patrol', status: 'leave', created_at: today },
 ];
 
 export const mockTasks: Task[] = [
@@ -26,10 +26,14 @@ export const mockTasks: Task[] = [
 ];
 
 export const mockInventory: Inventory[] = [
-  { id: '1', name: '内镜清洗液', code: 'CL-001', quantity: 100, min_stock: 20, batch_no: 'B202401', expire_date: '2025-12-31', unit: '瓶', price: 50.00, created_at: today },
-  { id: '2', name: '消毒湿巾', code: 'CL-002', quantity: 500, min_stock: 50, batch_no: 'B202402', expire_date: '2025-06-30', unit: '包', price: 15.00, created_at: today },
-  { id: '3', name: '一次性手套', code: 'CL-003', quantity: 150, min_stock: 200, batch_no: 'B202403', expire_date: '2025-09-30', unit: '盒', price: 30.00, created_at: today },
-  { id: '4', name: '内镜润滑剂', code: 'CL-004', quantity: 50, min_stock: 10, batch_no: 'B202404', expire_date: '2025-03-31', unit: '支', price: 80.00, created_at: today },
+  { id: '1', name: '内镜清洗液', code: 'CL-001', quantity: 50, min_stock: 20, batch_no: 'B202401', expire_date: '2025-06-30', unit: '瓶', price: 50.00, created_at: today },
+  { id: '2', name: '内镜清洗液', code: 'CL-001', quantity: 50, min_stock: 20, batch_no: 'B202405', expire_date: '2025-12-31', unit: '瓶', price: 50.00, created_at: today },
+  { id: '3', name: '消毒湿巾', code: 'CL-002', quantity: 300, min_stock: 50, batch_no: 'B202402', expire_date: '2025-03-31', unit: '包', price: 15.00, created_at: today },
+  { id: '4', name: '消毒湿巾', code: 'CL-002', quantity: 200, min_stock: 50, batch_no: 'B202406', expire_date: '2025-06-30', unit: '包', price: 15.00, created_at: today },
+  { id: '5', name: '一次性手套', code: 'CL-003', quantity: 100, min_stock: 200, batch_no: 'B202403', expire_date: '2025-06-30', unit: '盒', price: 30.00, created_at: today },
+  { id: '6', name: '一次性手套', code: 'CL-003', quantity: 50, min_stock: 200, batch_no: 'B202407', expire_date: '2025-09-30', unit: '盒', price: 30.00, created_at: today },
+  { id: '7', name: '内镜润滑剂', code: 'CL-004', quantity: 30, min_stock: 10, batch_no: 'B202404', expire_date: '2025-03-31', unit: '支', price: 80.00, created_at: today },
+  { id: '8', name: '内镜润滑剂', code: 'CL-004', quantity: 20, min_stock: 10, batch_no: 'B202408', expire_date: '2025-09-30', unit: '支', price: 80.00, created_at: today },
 ];
 
 export const mockRequests: Request[] = [

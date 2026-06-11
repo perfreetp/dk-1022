@@ -2,6 +2,13 @@ import { ClipboardList, AlertCircle, Calendar, CheckCircle, RefreshCw } from 'lu
 import { useStore } from '../store';
 import Header from '../components/Header';
 
+const positionMap: Record<string, string> = {
+  cleaning: '清洗',
+  disinfection: '消毒',
+  registration: '登记',
+  patrol: '巡回',
+};
+
 export default function Dashboard() {
   const { tasks, schedulings, requests, exceptions, currentUser, users, handover, confirmHandover, resetHandover } = useStore();
   
@@ -15,6 +22,7 @@ export default function Dashboard() {
     const shiftMap: Record<string, string> = { morning: '早班', afternoon: '中班', night: '晚班' };
     return shiftMap[shift] || shift;
   };
+  const getPositionName = (position: string) => positionMap[position] || position;
 
   const handleConfirmHandover = () => {
     confirmHandover();
@@ -127,9 +135,9 @@ export default function Dashboard() {
                   {schedulings.filter(s => s.date === new Date().toISOString().split('T')[0]).map(schedule => (
                     <div key={schedule.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                       <div className="flex-1">
-                        <p className="font-medium">{getUserById(schedule.user_id)?.name}</p>
+                        <p className="font-medium">{getUserById(schedule.user_id)?.name || '待分配'}</p>
                         <p className="text-xs text-gray-500">
-                          {getShiftName(schedule.shift)}
+                          {getShiftName(schedule.shift)} · {getPositionName(schedule.position)}
                         </p>
                       </div>
                       <span className={`px-2 py-1 text-xs rounded-full ${

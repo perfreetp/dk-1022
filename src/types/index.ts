@@ -10,12 +10,14 @@ export interface User {
 
 export type ShiftType = 'morning' | 'afternoon' | 'night';
 export type ScheduleStatus = 'active' | 'leave' | 'adjusted';
+export type PositionType = 'cleaning' | 'disinfection' | 'registration' | 'patrol';
 
 export interface Scheduling {
   id: string;
   user_id: string;
   date: string;
   shift: ShiftType;
+  position: PositionType;
   status: ScheduleStatus;
   created_at: string;
 }
@@ -91,6 +93,18 @@ export interface CostStats {
   inventory_name: string;
   total_quantity: number;
   total_cost: number;
+}
+
+export interface EndoscopeCostStats {
+  endoscope_type: string;
+  total_cost: number;
+  consumptions: {
+    inventory_id: string;
+    inventory_name: string;
+    quantity: number;
+    unit_cost: number;
+    total_cost: number;
+  }[];
 }
 
 export interface MonthlyStats {
